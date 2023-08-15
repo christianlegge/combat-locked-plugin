@@ -20,6 +20,7 @@ import net.runelite.api.widgets.WidgetType;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
+import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.events.RuneScapeProfileChanged;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
@@ -43,23 +44,6 @@ public class CombatLockedPlugin extends Plugin {
             Skill.RANGED,
             Skill.PRAYER,
             Skill.MAGIC,
-            Skill.RUNECRAFT,
-            Skill.CONSTRUCTION,
-            Skill.HITPOINTS,
-            Skill.AGILITY,
-            Skill.HERBLORE,
-            Skill.THIEVING,
-            Skill.CRAFTING,
-            Skill.FLETCHING,
-            Skill.SLAYER,
-            Skill.HUNTER,
-            Skill.MINING,
-            Skill.SMITHING,
-            Skill.FISHING,
-            Skill.COOKING,
-            Skill.FIREMAKING,
-            Skill.WOODCUTTING,
-            Skill.FARMING
     };
     private static final int SCRIPTID_STATS_SETLEVEL = 394;
     private static final Pattern CA_MESSAGE_PATTERN = Pattern.compile("Congratulations, you've completed an? (?<tier>\\w+) combat task: <col=[0-9a-f]+>(?<task>(.+))</col>");
@@ -100,6 +84,14 @@ public class CombatLockedPlugin extends Plugin {
     protected void shutDown() throws Exception {
         overlayManager.remove(overlay);
         clientThread.invoke(this::removeWarnings);
+    }
+
+    @Subscribe
+    public void onConfigChanged(ConfigChanged event) {
+        if (CombatLockedConfig.GROUP.equals(event.getGroup())) {
+            updateAvailableLevels();
+            updateWarnings();
+        }
     }
 
     @Subscribe
@@ -216,8 +208,6 @@ public class CombatLockedPlugin extends Plugin {
         box.setOriginalWidth(4);
         box.setPos(0, 0, WidgetPositionMode.ABSOLUTE_CENTER, WidgetPositionMode.ABSOLUTE_CENTER);
         box.setFilled(true);
-        box.setOpacity(140);
-        box.setTextColor(Color.RED.getRGB());
 
         warnings[idx] = box;
 
@@ -225,9 +215,19 @@ public class CombatLockedPlugin extends Plugin {
 
     }
 
+    private void updateWarnings() {
+        clientThread.invoke(() -> {
+            for (Skill skill : SKILLS) {
+                updateWarning(skill);
+            }
+        });
+    }
+
     private void updateWarning(Skill skill) {
         int idx = Arrays.asList(SKILLS).indexOf(skill);
         Widget w = warnings[idx];
+        w.setOpacity(255 - getWarnColor().getAlpha());
+        w.setTextColor(getWarnColor().getRGB());
         w.setHidden(!shouldWarn(skill));
         w.revalidate();
     }
@@ -276,21 +276,41 @@ public class CombatLockedPlugin extends Plugin {
     }
 
     private void updateAvailableLevels() {
-        Skill[] skills = {Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE, Skill.RANGED, Skill.MAGIC, Skill.PRAYER};
-        int totalLevels = 0;
-        for (Skill s : skills) {
-            totalLevels += client.getRealSkillLevel(s);
-        }
-        this.availableLevels = this.totalCas * 4 - totalLevels + skills.length;
-        if (Arrays.asList(skills).contains(Skill.HITPOINTS)) {
-            this.availableLevels += 9;
-        }
+        int totalLevels = Arrays.stream(SKILLS).reduce(0, (a, v) -> a + client.getRealSkillLevel(v), Integer::sum);
+        this.availableLevels = this.totalCas * config.levelsPerCa() - totalLevels + SKILLS.length;
+//        if (Arrays.asList(SKILLS).contains(Skill.HITPOINTS)) {
+//            this.availableLevels += 9;
+//        }
     }
 
     private boolean shouldWarn(Skill skill) {
+        if (availableLevels > 0 && !config.warnWhenCloseAndAvailable()) {
+            return false;
+        }
+        if (availableLevels <= 0 && !config.warnWhenCloseNotAvailable()) {
+            return false;
+        }
         int xp = client.getSkillExperience(skill);
         int level = client.getRealSkillLevel(skill);
-        return level < 99 && reverseLerp(Experience.getXpForLevel(level), Experience.getXpForLevel(level + 1), xp) >= 0.85;
+        return level < 99 && reverseLerp(Experience.getXpForLevel(level), Experience.getXpForLevel(level + 1), xp) >= getWarnThreshold()/(float)100;
+    }
+
+    private int getWarnThreshold() {
+        if (availableLevels > 0) {
+            return config.warnThresholdAvailable();
+        }
+        else {
+            return config.warnThresholdNotAvailable();
+        }
+    }
+
+    private Color getWarnColor() {
+        if (availableLevels > 0) {
+            return config.warnColorAvailable();
+        }
+        else {
+            return config.warnColorNotAvailable();
+        }
     }
 
     private float reverseLerp(int a, int b, int x) {
