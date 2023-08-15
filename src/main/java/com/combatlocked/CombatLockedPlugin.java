@@ -71,7 +71,9 @@ public class CombatLockedPlugin extends Plugin {
 
     @Override
     protected void startUp() throws Exception {
-        overlayManager.add(overlay);
+        if (config.showOverlay()) {
+            overlayManager.add(overlay);
+        }
         initialized = false;
         if (client.getGameState() == GameState.LOGGED_IN) {
 			this.profileKey = configManager.getRSProfileKey();
@@ -91,6 +93,14 @@ public class CombatLockedPlugin extends Plugin {
         if (CombatLockedConfig.GROUP.equals(event.getGroup())) {
             updateAvailableLevels();
             updateWarnings();
+            if ("showOverlay".equals(event.getKey())) {
+                if (config.showOverlay()) {
+                    overlayManager.add(overlay);
+                }
+                else {
+                    overlayManager.remove(overlay);
+                }
+            }
         }
     }
 

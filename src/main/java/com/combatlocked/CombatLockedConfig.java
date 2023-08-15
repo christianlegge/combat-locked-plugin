@@ -40,6 +40,14 @@ public interface CombatLockedConfig extends Config
 	}
 
 	@ConfigItem(
+			keyName = "showOverlay",
+			name = "Show Overlay",
+			description = "Show an overlay on the game screen with levels available",
+			position = 1
+	)
+	default boolean showOverlay() { return true; }
+
+	@ConfigItem(
 			keyName = "warnWhenCloseAndAvailable",
 			name = "Skill tab warning",
 			description = "Show a warning in the skill tab when close to leveling and levels are available",
