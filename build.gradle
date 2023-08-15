@@ -23,7 +23,7 @@ dependencies {
 	testImplementation group: 'net.runelite', name:'jshell', version: runeLiteVersion
 }
 
-group = 'com.christianlegge'
+group = 'com.combatlocked'
 version = '1.0'
 
 tasks.withType(JavaCompile) {
